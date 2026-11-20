@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import os
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -15,6 +16,11 @@ async def main():
         command=sys.executable,
         args=["-m", "app.proxy.mcp_proxy"],
         cwd=str(PROJECT_ROOT),
+        env={
+            **os.environ,
+            "DISPLAY": os.environ.get("DISPLAY", ":0"),
+            "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY", "wayland-0"),
+        },
     )
 
     async with stdio_client(guardian_params) as (read_stream, write_stream):
@@ -28,23 +34,33 @@ async def main():
             # Ask Guardian for available tools.
             tools = await session.list_tools()
 
-            # Test calculate_sum through MCP Guardian.
-            result = await session.call_tool(
-                "calculate_sum",
-                arguments={"a": 10, "b": 20},
+            print("\nSending two tool requests concurrently...")
+
+            # Request 1
+            async def request_one():
+                return await session.call_tool(
+                    "calculate_sum",
+                    arguments={"a": 10, "b": 20},
+                )
+
+            # Request 2
+            async def request_two():
+                return await session.call_tool(
+                    "calculate_sum",
+                    arguments={"a": 5, "b": 7},
+                )
+
+            # Send both requests at the same time.
+            results = await asyncio.gather(
+                request_one(),
+                request_two(),
             )
 
-            print("\ncalculate_sum result:")
-            print(result.content)
+            print("\nRequest 1: calculate_sum(10, 20)")
+            print("Result:", results[0].content)
 
-            # Test get_system_info through MCP Guardian.
-            result = await session.call_tool(
-                "get_system_info",
-                arguments={},
-            )
-
-            print("\nget_system_info result:")
-            print(result.content)
+            print("\nRequest 2: calculate_sum(5, 7)")
+            print("Result:", results[1].content)
 
             print("\nTools exposed by MCP Guardian:")
 

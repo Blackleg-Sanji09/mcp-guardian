@@ -2,39 +2,44 @@ import tkinter as tk
 import json
 
 
-def show_approval_popup(tool_name: str, arguments: dict):
-    root = tk.Tk()
+def show_approval_popup(
+    parent: tk.Tk,
+    tool_name: str,
+    arguments: dict,
+    on_decision,
+    position=None,
+):
+    window = tk.Toplevel(parent)
 
     window_width = 480
     window_height = 500
 
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
+    screen_width = window.winfo_screenwidth()
+    screen_height = window.winfo_screenheight()
 
-    x = (screen_width - window_width) // 2
-    y = (screen_height - window_height) // 2
-    
-    root.title("MCP Guardian — Security Approval")
-    root.geometry(f"{window_width}x{window_height}+{x}+{y}")
-    root.resizable(False, False)
-    root.attributes("-topmost", True)
-    root.configure(bg="#111827")
+    if position is None:
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+    else:
+        x, y = position
 
-    decision = None
+    window.title("MCP Guardian — Security Approval")
+    window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    window.resizable(False, False)
+    window.attributes("-topmost", True)
+    window.configure(bg="#111827")
 
     # ---------- Button actions ----------
     def allow_request():
-        nonlocal decision
-        decision = "approved"
-        root.destroy()
+        on_decision("approved")
+        window.destroy()
 
     def block_request():
-        nonlocal decision
-        decision = "blocked"
-        root.destroy()
+        on_decision("blocked")
+        window.destroy()
 
     # ---------- Header ----------
-    header = tk.Frame(root, bg="#1F2937", height=75)
+    header = tk.Frame(window, bg="#1F2937", height=75)
     header.pack(fill="x")
     header.pack_propagate(False)
 
@@ -58,7 +63,7 @@ def show_approval_popup(tool_name: str, arguments: dict):
 
     # ---------- Warning ----------
     warning = tk.Label(
-        root,
+        window,
         text="A tool is requesting permission to execute",
         font=("Arial", 10),
         fg="#FBBF24",
@@ -68,7 +73,7 @@ def show_approval_popup(tool_name: str, arguments: dict):
 
     # ---------- Tool card ----------
     tool_card = tk.Frame(
-        root,
+        window,
         bg="#1F2937",
         highlightbackground="#374151",
         highlightthickness=1,
@@ -96,7 +101,7 @@ def show_approval_popup(tool_name: str, arguments: dict):
 
     # ---------- Arguments card ----------
     args_card = tk.Frame(
-        root,
+        window,
         bg="#1F2937",
         highlightbackground="#374151",
         highlightthickness=1,
@@ -112,7 +117,6 @@ def show_approval_popup(tool_name: str, arguments: dict):
     )
     args_heading.pack(anchor="w", padx=15, pady=(8, 3))
 
-    # Convert arguments into formatted JSON.
     args_text = json.dumps(
         arguments,
         indent=2,
@@ -142,7 +146,7 @@ def show_approval_popup(tool_name: str, arguments: dict):
 
     # ---------- Warning note ----------
     note = tk.Label(
-        root,
+        window,
         text="This request will execute on the MCP server if allowed.",
         font=("Arial", 9),
         fg="#9CA3AF",
@@ -151,7 +155,7 @@ def show_approval_popup(tool_name: str, arguments: dict):
     note.pack(pady=(2, 15))
 
     # ---------- Buttons ----------
-    button_frame = tk.Frame(root, bg="#111827")
+    button_frame = tk.Frame(window, bg="#111827")
     button_frame.pack(fill="x", padx=20)
 
     block_button = tk.Button(
@@ -184,18 +188,25 @@ def show_approval_popup(tool_name: str, arguments: dict):
     )
     allow_button.pack(side="right", expand=True, fill="x", padx=(8, 0))
 
-    root.mainloop()
-
-    return decision
+    # Closing the window should default to blocking the request.
+    window.protocol("WM_DELETE_WINDOW", block_request)
 
 
 if __name__ == "__main__":
-    result = show_approval_popup(
+    root = tk.Tk()
+    root.withdraw()
+
+    def handle_decision(decision):
+        print(f"User decision: {decision}")
+
+    show_approval_popup(
+        parent=root,
         tool_name="calculate_sum",
         arguments={
             "a": 10,
             "b": 20,
         },
+        on_decision=handle_decision,
     )
 
-    print(f"User decision: {result}")
+    root.mainloop()

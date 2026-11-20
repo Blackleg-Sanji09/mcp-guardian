@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import os
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -12,6 +13,7 @@ from mcp.types import CallToolResult, TextContent
 
 from app.approval.manager import ApprovalManager
 from app.approval.models import ApprovalStatus
+from app.ui.popup_manager import PopupManager
 
 
 # Project root directory
@@ -45,6 +47,8 @@ async def main():
 
     async with connect_to_upstream() as upstream_session:
         approval_manager = ApprovalManager()
+        loop = asyncio.get_running_loop()
+        popup_manager = PopupManager(loop)
 
         # Forward tool discovery requests to the original server.
         async def handle_list_tools(context, params):
@@ -75,18 +79,13 @@ async def main():
                 file=sys.stderr,
             )
 
-            # TEMPORARY: Simulate the user approving the request.
-            async def simulate_decision():
-                await asyncio.sleep(2)
-
-                if  request.tool_name == "calculate_sum":
-                    approval_manager.approve_request(request.request_id)
-                    print("Simulated decision: APPROVED", file=sys.stderr)
-                else:
-                    approval_manager.block_request(request.request_id)
-                    print("Simulated decision: BLOCKED", file=sys.stderr)
-
-            asyncio.create_task(simulate_decision())
+            # Display the approval popup.
+            popup_manager.show_popup(
+                request_id=request.request_id,
+                tool_name=request.tool_name,
+                arguments=request.arguments,
+                approval_manager=approval_manager,
+            )
 
             # Wait until the request receives a decision.
             await approval_manager.wait_for_decision(request.request_id)
