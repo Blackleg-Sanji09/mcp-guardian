@@ -8,6 +8,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
+from mcp.types import CallToolResult, TextContent
+
+from app.approval.manager import ApprovalManager
+from app.approval.models import ApprovalStatus
 
 
 # Project root directory
@@ -40,6 +44,7 @@ async def main():
     """Run MCP Guardian as a proxy server."""
 
     async with connect_to_upstream() as upstream_session:
+        approval_manager = ApprovalManager()
 
         # Forward tool discovery requests to the original server.
         async def handle_list_tools(context, params):
@@ -47,21 +52,68 @@ async def main():
 
             return await upstream_session.list_tools(params=params)
 
-        # Forward tool invocation requests to the original server.
+        # Handle tool invocation requests.
         async def handle_call_tool(context, params):
+            # Create an approval request.
+            request = approval_manager.create_request(
+                tool_name=params.name,
+                arguments=params.arguments or {},
+            )
+
             print(
-                f"Forwarding tool call: {params.name}",
+                f"\nApproval required for: {request.tool_name}",
                 file=sys.stderr,
             )
 
             print(
-                f"Arguments: {params.arguments}",
+                f"Request ID: {request.request_id}",
                 file=sys.stderr,
             )
 
-            return await upstream_session.call_tool(
-                name=params.name,
-                arguments=params.arguments,
+            print(
+                f"Arguments: {request.arguments}",
+                file=sys.stderr,
+            )
+
+            # TEMPORARY: Simulate the user approving the request.
+            async def simulate_decision():
+                await asyncio.sleep(2)
+
+                if  request.tool_name == "calculate_sum":
+                    approval_manager.approve_request(request.request_id)
+                    print("Simulated decision: APPROVED", file=sys.stderr)
+                else:
+                    approval_manager.block_request(request.request_id)
+                    print("Simulated decision: BLOCKED", file=sys.stderr)
+
+            asyncio.create_task(simulate_decision())
+
+            # Wait until the request receives a decision.
+            await approval_manager.wait_for_decision(request.request_id)
+
+            # Forward only approved requests.
+            if request.status == ApprovalStatus.APPROVED:
+                print(
+                    "Request approved. Forwarding to upstream server.",
+                    file=sys.stderr,
+                )
+
+                return await upstream_session.call_tool(
+                    name=params.name,
+                    arguments=params.arguments,
+                )
+
+            # Blocked requests never reach the upstream server.
+            print("Request blocked.", file=sys.stderr)
+
+            return CallToolResult(
+                content=[
+                    TextContent(
+                        type="text",
+                        text="Tool execution blocked by MCP Guardian.",
+                    )
+                ],
+                isError=True,
             )
 
         # Create Guardian's downstream MCP server.
