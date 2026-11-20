@@ -1,17 +1,24 @@
 import asyncio
+import sys
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def main():
+async def main() -> None:
     server_params = StdioServerParameters(
-        command="python",
+        command=sys.executable,
         args=["tests/fixtures/test_mcp_server.py"],
     )
 
-    async with stdio_client(server_params) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
+    async with stdio_client(server_params) as (
+        read_stream,
+        write_stream,
+    ):
+        async with ClientSession(
+            read_stream,
+            write_stream,
+        ) as session:
 
             # Initialize the MCP connection
             await session.initialize()

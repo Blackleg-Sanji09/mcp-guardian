@@ -30,13 +30,27 @@ def show_approval_popup(
     window.configure(bg="#111827")
 
     # ---------- Button actions ----------
+    decision_made = False
+
+    def make_decision(decision):
+        nonlocal decision_made
+
+        if decision_made:
+            return
+
+        decision_made = True
+
+        try:
+            on_decision(decision)
+        finally:
+            if window.winfo_exists():
+                window.destroy()
+
     def allow_request():
-        on_decision("approved")
-        window.destroy()
+        make_decision("approved")
 
     def block_request():
-        on_decision("blocked")
-        window.destroy()
+        make_decision("blocked")
 
     # ---------- Header ----------
     header = tk.Frame(window, bg="#1F2937", height=75)
@@ -123,9 +137,6 @@ def show_approval_popup(
         ensure_ascii=False,
     )
 
-    if not args_text:
-        args_text = "No arguments provided"
-
     args_display = tk.Text(
         args_card,
         height=4,
@@ -139,7 +150,7 @@ def show_approval_popup(
         pady=8,
     )
 
-    args_display.insert("1.0", args_text)
+    args_display.insert("1.0", args_text or "No arguments provided")
     args_display.config(state="disabled")
 
     args_display.pack(fill="x", padx=15, pady=(0, 5))
@@ -188,25 +199,8 @@ def show_approval_popup(
     )
     allow_button.pack(side="right", expand=True, fill="x", padx=(8, 0))
 
-    # Closing the window should default to blocking the request.
+    # Closing the window defaults to blocking.
     window.protocol("WM_DELETE_WINDOW", block_request)
 
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()
-
-    def handle_decision(decision):
-        print(f"User decision: {decision}")
-
-    show_approval_popup(
-        parent=root,
-        tool_name="calculate_sum",
-        arguments={
-            "a": 10,
-            "b": 20,
-        },
-        on_decision=handle_decision,
-    )
-
-    root.mainloop()
+    # Return the window so PopupManager can manage its lifecycle.
+    return window
